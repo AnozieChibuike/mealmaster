@@ -7,14 +7,16 @@ import * as ImagePicker from "expo-image-picker";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import model from "../../lib/gemini";
 
-function Landing() {
+function Landing({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [image, setImage] = useState("");
+  const [food, setFood] = useState(null);
   const uploadImage = async (mode) => {
     try {
       setLoading(true);
       let result = null;
       if (mode === "gallery") {
+        
         await ImagePicker.requestMediaLibraryPermissionsAsync();
         result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -36,9 +38,14 @@ function Landing() {
     } catch (error) {
       Alert(error);
     } finally {
+      setFood(null)
       setLoading(false);
     }
   };
+
+  function tellMeMore () {
+    navigation.navigate("ImageFound", { food });
+  }
 
   async function aiImageRun() {
     setLoading(true);
@@ -53,12 +60,22 @@ function Landing() {
       };
       const result = await model.generateContent([constant.prompt, ploader]);
       const response = await result.response;
-      const text = response.text();
-      console.log(text);
+      const text = JSON.parse(response.text())
+      console.log(text)
+      if (!!Number(text.status))
+        setFood({
+          name: text.name,
+          ingredients: text?.ingredients,
+          steps: text?.steps,
+          found: true,
+        });
+      else setFood({ found: false });
     } catch (error) {
       console.log(error);
-      Alert.alert('Error',
-        'An error occurred while generating the image. Please try again later.',)
+      Alert.alert(
+        "Error",
+        "An error occurred while generating the image. Please try again later."
+      );
     } finally {
       setLoading(false);
     }
@@ -103,7 +120,6 @@ function Landing() {
           ) : (
             <></>
           )}
-          
         </View>
         <View
           style={{
@@ -126,10 +142,7 @@ function Landing() {
               alignItems: "center",
             }}
           >
-            <TouchableOpacity
-              onPress={() => uploadImage()}
-              disabled={loading}
-            >
+            <TouchableOpacity onPress={() => uploadImage()} disabled={loading}>
               <View
                 style={{
                   backgroundColor: "#fcad03",
@@ -182,11 +195,19 @@ function Landing() {
           </View>
         </View>
       </View>
+
+      {food && (
+        <Text selectable style={{ color: "black", textAlign: "center", fontSize: 30, fontWeight: 'bold' }}>
+          {food?.found ? food.name : "No meal found..."}
+        </Text>
+      )}
       {image && (
         <Button
-          text="Search Food in Image"
+          text={food?.found ? "Tell me more" : "Search Food in Image"}
           onPress={() => {
-            aiImageRun()
+            if (!food?.found)
+            aiImageRun();
+          else tellMeMore();
           }}
           disabled={loading}
           bg={"#36517d"}
@@ -199,23 +220,22 @@ function Landing() {
 }
 
 const urlToBase64 = async (url) => {
-    const response = await fetch(url);
-    const blob = await response.blob();
-    const reader = new FileReader();
+  const response = await fetch(url);
+  const blob = await response.blob();
+  const reader = new FileReader();
 
-    return new Promise((resolve, reject) => {
-      reader.onload = () => {
-        const base64String = reader.result.split(",")[1];
-        resolve(base64String);
-      };
+  return new Promise((resolve, reject) => {
+    reader.onload = () => {
+      const base64String = reader.result.split(",")[1];
+      resolve(base64String);
+    };
 
-      reader.onerror = () => {
-        reject("Error reading image.");
-      };
+    reader.onerror = () => {
+      reject("Error reading image.");
+    };
 
-      reader.readAsDataURL(blob);
-    });
-  };
-
+    reader.readAsDataURL(blob);
+  });
+};
 
 export default Landing;
